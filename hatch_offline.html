@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0d1f1a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hatch">
+<title>Hatch — Offline Fly Selector</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0d1f1a;
+  --surface:#132820;
+  --surface2:#1a3528;
+  --border:#2a4a3a;
+  --text:#e8ede8;
+  --muted:#7a9e8a;
+  --accent:#5dbf7a;
+  --accent2:#a3d977;
+  --warm:#d4a847;
+  --river:#3d9fc4;
+  --lake:#5b7fd4;
+  --danger:#c45d5d;
+  --r:10px;
+}
+html{height:100%;overflow-x:hidden}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Segoe UI',system-ui,sans-serif;
+  min-height:100%;
+  font-size:15px;
+  line-height:1.5;
+  overscroll-behavior:none;
+}
+
+/* Grain overlay */
+body::after{
+  content:'';
+  position:fixed;
+  inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events:none;
+  z-index:999;
+  opacity:.4;
+}
+
+/* ── Top bar ── */
+.topbar{
+  position:sticky;top:0;z-index:50;
+  background:rgba(13,31,26,0.95);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:14px 20px 12px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.logo{
+  font-size:22px;font-weight:800;letter-spacing:-0.5px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.offline-badge{
+  font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  background:var(--surface2);color:var(--accent);
+  border:1px solid var(--border);
+  padding:3px 8px;border-radius:20px;
+}
+
+/* ── Mode toggle ── */
+.mode-toggle{
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:0;margin:16px 16px 0;
+  border:1px solid var(--border);border-radius:var(--r);overflow:hidden;
+}
+.mode-btn{
+  padding:14px 8px;text-align:center;
+  font-size:13px;font-weight:600;letter-spacing:.04em;
+  background:transparent;color:var(--muted);
+  border:none;cursor:pointer;
+  transition:all .2s;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.mode-btn.active{background:var(--surface2);color:var(--text);}
+.mode-btn .mode-icon{font-size:18px}
+
+/* ── Scrollable content ── */
+.content{padding:16px 16px 100px;}
+
+/* ── Section label ── */
+.slabel{
+  font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:10px;font-weight:600;
+}
+
+/* ── Chip rows ── */
+.chip-row{margin-bottom:18px;}
+.chips{display:flex;flex-wrap:wrap;gap:7px;}
+.chip{
+  padding:9px 16px;border-radius:24px;
+  border:1px solid var(--border);
+  background:var(--surface);color:var(--muted);
+  font-size:13px;font-weight:500;
+  cursor:pointer;transition:all .15s;
+  white-space:nowrap;
+}
+.chip.active{
+  background:var(--accent);color:#0d1f1a;
+  border-color:var(--accent);font-weight:700;
+}
+
+/* ── CTA button ── */
+.cta-wrap{
+  position:fixed;bottom:0;left:0;right:0;
+  padding:14px 16px 24px;
+  background:linear-gradient(to top, var(--bg) 70%, transparent);
+  z-index:40;
+}
+.cta{
+  display:block;width:100%;padding:18px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:#0d1f1a;font-size:16px;font-weight:800;
+  border:none;border-radius:var(--r);cursor:pointer;
+  letter-spacing:.03em;text-align:center;
+  transition:opacity .15s,transform .1s;
+  box-shadow:0 4px 24px rgba(93,191,122,.25);
+}
+.cta:active{opacity:.9;transform:scale(.99);}
+
+/* ── Results screen ── */
+.screen{display:none;}
+.screen.visible{display:block;}
+
+/* ── Back btn ── */
+.back-btn{
+  display:flex;align-items:center;gap:8px;
+  background:var(--surface);border:1px solid var(--border);
+  color:var(--text);font-size:14px;font-weight:600;
+  padding:12px 18px;border-radius:var(--r);
+  cursor:pointer;margin-bottom:20px;
+  width:fit-content;
+}
+
+/* ── Condition summary strip ── */
+.cond-strip{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r);padding:14px 16px;margin-bottom:20px;
+}
+.cond-strip-label{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+.cond-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.cond-tag{
+  font-size:11px;padding:3px 10px;border-radius:12px;
+  background:var(--surface2);color:var(--accent);border:1px solid var(--border);
+}
+
+/* ── Hatch intel box ── */
+.hatch-box{
+  background:linear-gradient(135deg,rgba(93,191,122,.08),rgba(163,217,119,.05));
+  border:1px solid rgba(93,191,122,.25);
+  border-radius:var(--r);padding:16px;margin-bottom:20px;
+}
+.hatch-box-title{
+  font-size:11px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--accent);margin-bottom:8px;font-weight:700;
+}
+.hatch-box-text{font-size:13px;color:var(--text);line-height:1.7;opacity:.9;}
+
+/* ── Fly cards ── */
+.fly-list{display:flex;flex-direction:column;gap:12px;margin-bottom:16px;}
+
+.fly-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r);overflow:hidden;
+  animation:slideUp .3s ease both;
+}
+.fly-card:nth-child(1){animation-delay:.05s}
+.fly-card:nth-child(2){animation-delay:.12s}
+.fly-card:nth-child(3){animation-delay:.19s}
+.fly-card:nth-child(4){animation-delay:.26s}
+.fly-card:nth-child(5){animation-delay:.33s}
+.fly-card:nth-child(6){animation-delay:.40s}
+
+@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+.fly-card-header{
+  display:flex;align-items:flex-start;
+  justify-content:space-between;gap:12px;
+  padding:16px 16px 12px;
+  border-bottom:1px solid var(--border);
+}
+.fly-name{font-size:17px;font-weight:700;color:var(--text);line-height:1.2;}
+.fly-size{font-size:12px;color:var(--river);font-weight:600;margin-top:3px;}
+
+.fly-badge-row{display:flex;flex-direction:column;align-items:flex-end;gap:6px;}
+.fly-type-badge{
+  font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 9px;border-radius:12px;font-weight:700;
+  white-space:nowrap;
+}
+.badge-dry{background:rgba(212,168,71,.15);color:var(--warm);border:1px solid rgba(212,168,71,.3);}
+.badge-nymph{background:rgba(61,159,196,.15);color:var(--river);border:1px solid rgba(61,159,196,.3);}
+.badge-streamer{background:rgba(196,93,93,.15);color:var(--danger);border:1px solid rgba(196,93,93,.3);}
+.badge-emerger{background:rgba(163,217,119,.15);color:var(--accent2);border:1px solid rgba(163,217,119,.3);}
+.badge-wet{background:rgba(91,127,212,.15);color:var(--lake);border:1px solid rgba(91,127,212,.3);}
+.badge-chironomid{background:rgba(91,127,212,.15);color:var(--lake);border:1px solid rgba(91,127,212,.3);}
+.badge-attractor{background:rgba(212,168,71,.15);color:var(--warm);border:1px solid rgba(212,168,71,.3);}
+
+.conf-dots{display:flex;gap:4px;align-items:center;}
+.conf-dot{width:8px;height:8px;border-radius:50%;background:var(--border);}
+.conf-dot.on{background:var(--accent);}
+
+.fly-card-body{padding:14px 16px;}
+.fly-img-wrap{
+  width:100%;height:160px;overflow:hidden;
+  border-bottom:1px solid var(--border);
+  background:var(--surface2);
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+.fly-img-wrap img{
+  width:100%;height:100%;object-fit:cover;
+  display:block;transition:opacity .3s;
+}
+.fly-img-wrap img.loading{opacity:0;}
+.fly-img-wrap img.loaded{opacity:1;}
+.fly-img-none{
+  font-size:11px;color:var(--muted);letter-spacing:.08em;
+  text-transform:uppercase;opacity:.5;
+}
+.fly-reason{font-size:13px;color:var(--text);line-height:1.75;opacity:.85;margin-bottom:10px;}
+.fly-tip{
+  font-size:12px;color:var(--accent);line-height:1.6;
+  padding-top:10px;border-top:1px solid var(--border);
+  font-weight:500;
+}
+.fly-tip::before{content:'→ ';font-size:14px;}
+
+/* Priority label */
+.priority-label{
+  font-size:10px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:10px;font-weight:600;padding-top:4px;
+}
+
+/* ── Section dividers inside results ── */
+.results-section-title{
+  font-size:12px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--muted);margin:24px 0 12px;font-weight:700;
+  display:flex;align-items:center;gap:10px;
+}
+.results-section-title::after{
+  content:'';flex:1;height:1px;background:var(--border);
+}
+
+/* ── Empty state ── */
+.empty{
+  text-align:center;padding:48px 24px;
+  color:var(--muted);font-size:14px;line-height:1.7;
+}
+
+/* ── Install banner ── */
+.install-banner{
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--r);padding:14px 16px;margin-bottom:20px;
+  display:flex;align-items:flex-start;gap:12px;
+}
+.install-banner-icon{font-size:22px;flex-shrink:0;margin-top:1px;}
+.install-banner-text{font-size:12px;color:var(--muted);line-height:1.6;}
+.install-banner-text strong{color:var(--text);display:block;margin-bottom:2px;font-size:13px;}
+.install-close{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;margin-left:auto;flex-shrink:0;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">Hatch</div>
+  <div class="offline-badge">100% Offline</div>
+</div>
+
+<!-- ══════════════ SELECTOR SCREEN ══════════════ -->
+<div id="selector-screen" class="screen visible">
+
+  <div id="install-banner" class="install-banner" style="margin:16px 16px 0;">
+    <div class="install-banner-icon">📲</div>
+    <div class="install-banner-text">
+      <strong>Install to home screen</strong>
+      Chrome menu → "Add to Home screen" — works like a real app, zero signal needed.
+    </div>
+    <button class="install-close" onclick="document.getElementById('install-banner').style.display='none'">×</button>
+  </div>
+
+  <!-- Mode: River / Lake -->
+  <div class="mode-toggle">
+    <button class="mode-btn active" id="mode-river" onclick="setMode('river')">
+      <span class="mode-icon">🏞</span> River / Stream
+    </button>
+    <button class="mode-btn" id="mode-lake" onclick="setMode('lake')">
+      <span class="mode-icon">🏔</span> Lake / Stillwater
+    </button>
+  </div>
+
+  <div class="content">
+
+    <!-- RIVER CONDITIONS (shown when mode=river) -->
+    <div id="river-conditions">
+      <div class="chip-row">
+        <div class="slabel">Water clarity</div>
+        <div class="chips">
+          <div class="chip" data-group="clarity" data-val="crystal">Crystal clear</div>
+          <div class="chip" data-group="clarity" data-val="offcolor">Slightly off</div>
+          <div class="chip" data-group="clarity" data-val="murky">Murky / stained</div>
+          <div class="chip" data-group="clarity" data-val="blown">Blown out</div>
+        </div>
+      </div>
+
+      <div class="chip-row">
+        <div class="slabel">Water temperature</div>
+        <div class="chips">
+          <div class="chip" data-group="temp" data-val="verycold">Under 40°F</div>
+          <div class="chip" data-group="temp" data-val="cold">40–48°F</div>
+          <div class="chip" data-group="temp" data-val="cool">48–56°F</div>
+          <div class="chip" data-group="temp" data-val="ideal">56–65°F</div>
+          <div class="chip" data-group="temp" data-val="warm">Over 65°F</div>
+        </div>
+      </div>
+
+      <div class="chip-row">
+        <div class="slabel">Sky &amp; weather</div>
+        <div class="chips">
+          <div class="chip" data-group="sky" data-val="overcast">Overcast / cloudy</div>
+          <div class="chip" data-group="sky" data-val="snow">Snowing</div>
+          <div class="chip" data-group="sky" data-val="sunny">Bright &amp; sunny</div>
+          <div class="chip" data-group="sky" data-val="partly">Partly cloudy</div>
+          <div class="chip" data-group="sky" data-val="evening">Evening / dusk</div>
+        </div>
+      </div>
+
+      <div class="chip-row">
+        <div class="slabel">River flow</div>
+        <div class="chips">
+          <div class="chip" data-group="flow" data-val="low">Low &amp; slow</div>
+          <div class="chip" data-group="flow" data-val="normal">Normal</div>
+          <div class="chip" data-group="flow" data-val="high">High &amp; fast</div>
+          <div class="chip" data-group="flow" data-val="dropping">Dropping / clearing</div>
+        </div>
+      </div>
+
+      <div class="chip-row">
+        <div class="slabel">Fish activity</div>
+        <div class="chips">
+          <div class="chip" data-group="activity" data-val="rising">Actively rising</div>
+          <div class="chip" data-group="activity" data-val="sipping">Sipping / subtle rises</div>
+          <div class="chip" data-group="activity" data-val="holding">Holding deep, not rising</div>
+          <div class="chip" data-group="activity" data-val="none">No visible activity</div>
+        </div>
+      </div>
+
+      <div class="chip-row">
+        <div class="slabel">Season</div>
+        <div class="chips">
+          <div class="chip" data-group="season" data-val="earlyspring">Early spring (Mar–Apr)</div>
+          <div class="chip" data-group="season" data-val="latespring">Late spring (May–Jun)</div>
+          <div class="chip" data-group="season" data-val="summer">Summer (Jul–Aug)</div>
+          <div class="chip" data-group="season" data-val="fall">Fall (Sep–Nov)</div>
+          <div class="chip" data-group="season" data-val="winter">Winter / ice-off</div>
+        </div>
+      </div>
+
+      <div class="chip-row">
+        <div class="slabel">Target species</div>
+        <div class="chips">
+          <div class="chip" data-group="species" data-val="brown">Brown trout</div>
+          <div class="chip" data-group="species" data-val="rainbow">Rainbow</div>
+          <div class="chip" data-group="species" data-val="cutthroat">Cutthroat</div>
+          <div class="chip" data-group="species" data-val="tiger">Tiger trout</div>
+          <div class="chip" data-group="species" data-val="brook">Brook trout</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LAKE CONDITIONS (shown when mode=lake) -->
+    <div id="lake-conditions" style="display:none;">
+      <div class="chip-row">
+        <div class="slabel">Lake type</div>
+        <div class="chips">
+          <div class="chip" data-group="laketype" data-val="reservoir">Reservoir (Strawberry, Jordanelle, etc.)</div>
+          <div class="chip" data-group="laketype" data-val="mountain">Mountain / alpine lake</div>
+          <div class="chip" data-group="laketype" data-val="tailwater">Tailwater / dam outlet</div>
+        </div>
+      </div>
+
+      <div class="chip-row">
+        <div class="slabel">Season / conditions</div>
+        <div class="chips">
+          <div class="chip" data-group="lakeseason" data-val="iceoff">Ice-off (early spring)</div>
+          <div class="chip" data-group="lakeseason" data-val="earlyspring">Early spring (Apr–May)</div>
+          <div class="chip" data-group="lakeseason" data-val="latespring">Late spring (Jun)</div>
+          <div class="chip" data-group="lakeseason" data-val="summer">Summer (Jul–Aug)</div>
+          <div class="chip" data-group="lakeseason" data-val="fall">Fall (Sep–Oct)</div>
+          <div class="chip" data-group="lakeseason" data-val="ice">Ice fishing (winter)</div>
+        </div>
+      </div>
+
+      <div class="chip-row">
+        <div class="slabel">Sky &amp; light</div>
+        <div class="chips">
+          <div class="chip" data-group="lakesky" data-val="overcast">Overcast / cloudy</div>
+          <div class="chip" data-group="lakesky" data-val="sunny">Bright sunny</div>
+          <div class="chip" data-group="lakesky" data-val="earlymorning">Early morning / dawn</div>
+          <div class="chip" data-group="lakesky" data-val="evening">Evening / dusk</div>
+          <div class="chip" data-group="lakesky" data-val="wind">Windy / choppy</div>
+        </div>
+      </div>
+
+      <div class="chip-row">
+        <div class="slabel">Fish location / activity</div>
+        <div class="chips">
+          <div class="chip" data-group="lakeactivity" data-val="shallows">Cruising shallows</div>
+          <div class="chip" data-group="lakeactivity" data-val="surface">Rising / gulping surface</div>
+          <div class="chip" data-group="lakeactivity" data-val="midwater">Mid-water (5–15 ft)</div>
+          <div class="chip" data-group="lakeactivity" data-val="deep">Holding deep (15+ ft)</div>
+          <div class="chip" data-group="lakeactivity" data-val="weedbed">Near weed beds / structure</div>
+          <div class="chip" data-group="lakeactivity" data-val="inlet">Near inlet / current seam</div>
+        </div>
+      </div>
+
+      <div class="chip-row">
+        <div class="slabel">Water clarity</div>
+        <div class="chips">
+          <div class="chip" data-group="lakeclarity" data-val="clear">Clear / gin clear</div>
+          <div class="chip" data-group="lakeclarity" data-val="slight">Slightly off</div>
+          <div class="chip" data-group="lakeclarity" data-val="turbid">Turbid / green</div>
+        </div>
+      </div>
+
+      <div class="chip-row">
+        <div class="slabel">Target species</div>
+        <div class="chips">
+          <div class="chip" data-group="lakespecies" data-val="cutthroat">Cutthroat</div>
+          <div class="chip" data-group="lakespecies" data-val="rainbow">Rainbow</div>
+          <div class="chip" data-group="lakespecies" data-val="brown">Brown trout</div>
+          <div class="chip" data-group="lakespecies" data-val="tiger">Tiger trout</div>
+          <div class="chip" data-group="lakespecies" data-val="kokanee">Kokanee salmon</div>
+          <div class="chip" data-group="lakespecies" data-val="brook">Brook trout</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /selector-screen -->
+
+<!-- ══════════════ RESULTS SCREEN ══════════════ -->
+<div id="results-screen" class="screen">
+  <div class="content" style="padding-top:20px;">
+    <button class="back-btn" onclick="goBack()">← New conditions</button>
+
+    <div class="cond-strip">
+      <div class="cond-strip-label">Your conditions</div>
+      <div class="cond-tags" id="cond-tags"></div>
+    </div>
+
+    <div class="hatch-box">
+      <div class="hatch-box-title">Hatch &amp; feeding intel</div>
+      <div class="hatch-box-text" id="hatch-intel-text">—</div>
+    </div>
+
+    <div class="results-section-title">Top picks — tie these on</div>
+    <div class="fly-list" id="primary-flies"></div>
+
+    <div class="results-section-title" id="secondary-title" style="display:none">Also worth having</div>
+    <div class="fly-list" id="secondary-flies"></div>
+
+    <div style="height:80px"></div>
+  </div>
+</div>
+
+<div class="cta-wrap">
+  <button class="cta" id="cta-btn" onclick="showResults()">Find my flies →</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+let mode = 'river';
+const sel = {};
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('mode-river').classList.toggle('active', m==='river');
+  document.getElementById('mode-lake').classList.toggle('active', m==='lake');
+  document.getElementById('river-conditions').style.display = m==='river' ? '' : 'none';
+  document.getElementById('lake-conditions').style.display = m==='lake' ? '' : 'none';
+}
+
+// Chip selection
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const g = chip.dataset.group;
+    const v = chip.dataset.val;
+    document.querySelectorAll(`.chip[data-group="${g}"]`).forEach(c => c.classList.remove('active'));
+    if (sel[g] === v) { delete sel[g]; }
+    else { sel[g] = v; chip.classList.add('active'); }
+  });
+});
+
+// ═══════════════════════════════════════════════
+// FLY DATABASE — RIVER
+// ═══════════════════════════════════════════════
+const RIVER_FLIES = {
+
+  // ── MIDGE / CHIRONOMID (always relevant in cold water) ──
+  midge_zebra: {
+    name: "Zebra Midge", type: "Nymph", size: "#20–24",
+    tags: { temp:['verycold','cold'], sky:['overcast','snow','partly'], flow:['low','normal'] },
+    weight: 10,
+    reason: "Midges are the #1 food source in cold Utah tailwaters year-round. At under 48°F, trout eat almost nothing else. The Zebra Midge's silver rib perfectly mimics the segmented chironomid larva — match it exactly.",
+    tip: "Fish 12–18 inches below a small indicator, dead drift through seams and pools. Drop to size #24 in crystal clear low water."
+  },
+  midge_disco: {
+    name: "Disco Midge", type: "Nymph", size: "#22–26",
+    tags: { temp:['verycold','cold'], clarity:['crystal'] },
+    weight: 9,
+    reason: "The flashier cousin of the Zebra. When fish are keyed on midges in low, clear water and ignoring standard patterns, the pearl flash body of the Disco triggers strikes from pressured trout that have seen everything.",
+    tip: "Size down to #24–26 in gin-clear water. Use 6x–7x fluorocarbon and a drag-free drift — any drag and they'll refuse."
+  },
+  midge_mercury: {
+    name: "Mercury Midge (black)", type: "Nymph", size: "#20–24",
+    tags: { temp:['verycold','cold'], sky:['overcast','snow'] },
+    weight: 8,
+    reason: "The bead head mercury creates a tiny flash that pulses in low-light conditions. On snowy or overcast days in cold water when fish are lethargic and low, this is often the pattern that gets them to commit.",
+    tip: "Hang it as the point fly below a Zebra Midge on a two-fly nymph rig. The mercury bead acts like a tiny hot spot."
+  },
+  griffiths_gnat: {
+    name: "Griffith's Gnat", type: "Dry", size: "#18–22",
+    tags: { activity:['rising','sipping'], temp:['verycold','cold','cool'], sky:['overcast','snow','partly'] },
+    weight: 9,
+    reason: "When fish are sipping in cold weather, they're almost certainly eating midge clusters or emergers. The Griffith's Gnat imitates a cluster of midges trapped in the film — exactly what trout key on during cold-weather midge hatches.",
+    tip: "Fish it flat in the film with a long fine tippet (6x–7x). Look for micro-rises in flat tailouts and pool edges."
+  },
+
+  // ── BWO (Blue Wing Olive) ──
+  bwo_parachute: {
+    name: "Parachute BWO", type: "Dry", size: "#18–22",
+    tags: { sky:['overcast','snow'], season:['earlyspring','latespring','fall'], activity:['rising','sipping'] },
+    weight: 10,
+    reason: "BWOs hatch on exactly the days you're describing — cold, overcast, low light. This is the most important early-spring hatch in Utah. Parachute style sits flush in the film and is easy to track in low light. Don't leave home without it in April.",
+    tip: "Watch for size. Match what's in the air — if you see tiny olives, go to #22. Fish the inside bends where emergers collect in the slower current."
+  },
+  bwo_nymph: {
+    name: "Pheasant Tail Nymph (olive)", type: "Nymph", size: "#16–20",
+    tags: { sky:['overcast','snow','partly'], season:['earlyspring','latespring','fall'], activity:['holding','none'] },
+    weight: 9,
+    reason: "When BWOs are emerging but fish aren't yet rising, they're eating nymphs subsurface — the emerger stage just before it breaks the surface. An olive Pheasant Tail fished just under the film is deadly during the pre-hatch window.",
+    tip: "Weight lightly and fish it in the top 12 inches of water during overcast afternoons. Try a 2-fly rig with a midge below."
+  },
+  bwo_emerger: {
+    name: "RS2 (olive/grey)", type: "Emerger", size: "#20–22",
+    tags: { sky:['overcast','snow'], season:['earlyspring','fall'], activity:['sipping','rising'] },
+    weight: 9,
+    reason: "The RS2 is a legendary BWO emerger — sits half-in, half-out of the film just like a hatching dun. When fish are sipping and refusing standard dries, they're often eating emergers. This is the fly that cracks lock-jaw trout.",
+    tip: "Grease your leader down to 18 inches from the fly — let it sit in the film. Dead drift. No movement."
+  },
+
+  // ── STREAMERS ──
+  woolly_bugger_black: {
+    name: "Woolly Bugger (black)", type: "Streamer", size: "#6–10",
+    tags: { temp:['verycold','cold'], activity:['holding','none'], clarity:['crystal','offcolor'] },
+    weight: 10,
+    reason: "In water under 48°F, fish are sluggish and won't chase fast streamers — but a big black Woolly Bugger slowly worked through a deep pool triggers an instinct strike. Black silhouettes perfectly in cold clear water. This is the #1 big-fish fly when nothing is hatching.",
+    tip: "Cast across, let it sink 4–6 seconds, then slow strip with long pauses. The pause is everything — most hits come as it sinks after a strip. Dead-slow in very cold water."
+  },
+  woolly_bugger_olive: {
+    name: "Woolly Bugger (olive)", type: "Streamer", size: "#6–10",
+    tags: { temp:['cold','cool'], activity:['holding','none'], clarity:['crystal','offcolor'] },
+    weight: 9,
+    reason: "Olive mimics sculpin, crayfish, and large nymphs — exactly what big browns and cutthroats are hunting. In cool water where fish are slightly more active than in the dead cold, olive often outfishes black because it looks like a real food item.",
+    tip: "Work it tight to undercut banks, log jams, and deep rock faces. Strip hard once or twice, then let it sink — the drop gets eaten."
+  },
+  articulated_streamer: {
+    name: "Articulated Streamer (black/olive)", type: "Streamer", size: "#2–6",
+    tags: { species:['brown'], activity:['holding','none'], flow:['normal','high'], temp:['cold','cool'] },
+    weight: 10,
+    reason: "If big brown trout is your target, go big. An articulated pattern — Drunk & Disorderly, Sex Dungeon, or similar — creates the most realistic swimming action of any fly. Big browns in cold water are predatory and will commit to a large meal over chasing tiny bugs.",
+    tip: "Use a stiff 8–10 lb fluorocarbon leader to transfer action to the fly. Swing it through deep runs, hesitate at the end of the swing. Big fish hold in the soft water behind boulders."
+  },
+
+  // ── SAN JUAN WORM ──
+  san_juan_worm: {
+    name: "San Juan Worm (red/pink)", type: "Nymph", size: "#10–14",
+    tags: { flow:['high','dropping'], clarity:['murky','offcolor'], season:['earlyspring','latespring'] },
+    weight: 10,
+    reason: "After rain or during high flows, earthworms wash into rivers and trout gorge on them. The San Juan Worm is the most effective high-water fly in Utah — visibility is reduced, fish are looking for big easy targets, and red/pink triggers a feeding response at distance.",
+    tip: "Fish it deep on a heavy rig — enough weight to bounce bottom. High flows = fish holding behind structure near the banks. Work the slack water seams."
+  },
+  san_juan_pink: {
+    name: "San Juan Worm (hot pink)", type: "Nymph", size: "#10–14",
+    tags: { flow:['high','dropping'], clarity:['murky','blown'] },
+    weight: 9,
+    reason: "In blown-out or heavily stained water, hot pink is visible when red disappears. Fish are holding tight to banks and structure. This gives them something to find by color contrast even in near-zero visibility.",
+    tip: "Cast as close to the bank as possible and bounce it along the bottom. Use 4x tippet in fast water — don't go light when fish can't see details."
+  },
+
+  // ── PMD / PALE MORNING DUN ──
+  pmd_dry: {
+    name: "PMD (Pale Morning Dun) Parachute", type: "Dry", size: "#16–18",
+    tags: { season:['latespring','summer'], sky:['sunny','partly'], activity:['rising'] },
+    weight: 10,
+    reason: "PMDs emerge mid-morning through early afternoon in late spring and summer — one of Utah's best dry fly hatches. The pale yellow/olive color matches the natural perfectly. When you see olive-colored bugs and fish rising aggressively, this is your fly.",
+    tip: "Fish the flat water above riffles where PMDs collect. Parachute style is easier to track on the water. Switch to PMD Cripple or Emerger if fish refuse the dun."
+  },
+  pmd_nymph: {
+    name: "Hare's Ear Nymph (pale olive)", type: "Nymph", size: "#14–18",
+    tags: { season:['latespring','summer'], sky:['sunny','partly','overcast'], activity:['holding'] },
+    weight: 8,
+    reason: "The gold standard attractor nymph that imitates PMDs, BWOs, and dozens of other mayfly nymphs. The rough dubbing traps air bubbles like a real nymph. In late spring when multiple hatches overlap, this covers all of them at once.",
+    tip: "Bead-head version for faster water. Natural lead head for slow pools. Drift it 6–18 inches from the bottom — that's the feeding zone."
+  },
+
+  // ── CADDIS ──
+  elk_hair_caddis: {
+    name: "Elk Hair Caddis (tan/olive)", type: "Dry", size: "#14–18",
+    tags: { season:['latespring','summer'], sky:['sunny','partly','evening'], activity:['rising'] },
+    weight: 9,
+    reason: "Caddis hatches on Utah rivers from May through August are massive. The elk hair caddis is THE searching dry fly when you don't know what's happening — it imitates adult caddis in the tent-wing profile that trout recognize instantly.",
+    tip: "Skitter it lightly — caddis skate on the surface when laying eggs. A bit of drag is actually good here, unlike most dry fly fishing."
+  },
+  x_caddis: {
+    name: "X-Caddis (amber/olive)", type: "Emerger", size: "#14–16",
+    tags: { season:['latespring','summer'], activity:['sipping'], sky:['evening','partly'] },
+    weight: 9,
+    reason: "When fish are sipping caddis in the film and refusing the adult, they're eating emergers stuck in their shucks. The X-Caddis imitates this critical stage — the trailing shuck is what makes it irresistible. One of the most underused flies in Utah.",
+    tip: "Fish it flush in the film. The Z-lon tail is the trigger point — present it at the end of a dead drift when the fly swings slightly."
+  },
+  soft_hackle: {
+    name: "Soft Hackle Wet Fly (olive/partridge)", type: "Wet", size: "#12–16",
+    tags: { season:['latespring','summer'], sky:['evening','overcast'], activity:['rising','holding'] },
+    weight: 8,
+    reason: "During caddis and PMD hatches, swinging a soft hackle through the tail of a pool is devastatingly effective. The breathing hackle mimics an emerging insect fighting to the surface — exactly what trout see in the swing.",
+    tip: "Cast across-and-down, mend once upstream, let it swing in an arc. Hit it at the hang-down below you before recasting — strikes often come there."
+  },
+
+  // ── GREEN DRAKE ──
+  green_drake: {
+    name: "Green Drake Parachute", type: "Dry", size: "#10–12",
+    tags: { season:['latespring','summer'], sky:['overcast','partly'], activity:['rising'] },
+    weight: 10,
+    reason: "Green Drakes are Utah's most exciting hatch — large, obvious mayflies that bring every big fish to the surface at once. When they're popping (late May–June on Utah streams), nothing else matters. Fish get highly selective and only eat big olive-bodied dries.",
+    tip: "Be there at the right time: mid-morning to early afternoon on overcast days. Fish the naturals drifting along the bubble line. Size 10 — bigger than you think."
+  },
+
+  // ── HOPPER / TERRESTRIALS ──
+  hopper: {
+    name: "Parachute Hopper (tan/yellow)", type: "Dry", size: "#8–12",
+    tags: { season:['summer'], sky:['sunny'], activity:['none','holding'] },
+    weight: 10,
+    reason: "In summer when grasshoppers are active, big trout position themselves under overhanging banks waiting for them to fall. Hopper fishing produces the largest fish of the year. Slap it loud — the splat is part of the trigger.",
+    tip: "Cast tight to the bank — within 6 inches. Let it sit 3–4 seconds before any movement. Big fish take it slowly, don't set too fast."
+  },
+  beetle: {
+    name: "Foam Beetle (black)", type: "Dry", size: "#12–16",
+    tags: { season:['summer'], sky:['sunny','partly'], activity:['none','sipping'] },
+    weight: 7,
+    reason: "Beetles fall into the river constantly in summer and fish eat them without making much of a rise. If hoppers aren't producing, a black foam beetle is the subtle terrestrial alternative — especially effective in slower flat water.",
+    tip: "Add a small indicator or yarn tag on top for visibility — beetles are hard to track. Drop a small midge nymph 12 inches below it as a dropper."
+  },
+
+  // ── STONEFLY ──
+  pat_rubber_legs: {
+    name: "Pat's Rubber Legs (brown/black)", type: "Nymph", size: "#6–10",
+    tags: { flow:['normal','high'], temp:['cold','cool'], season:['earlyspring','latespring'], activity:['holding','none'] },
+    weight: 9,
+    reason: "Giant stonefly nymphs live for 2–3 years on the bottom — they're in the river year-round and fish always know them. Pat's Rubber Legs imitates a stonefly nymph perfectly and is a go-to heavy anchor fly on a two-fly nymph rig in Utah's bigger rivers.",
+    tip: "Use it as your point fly with a lighter midge or BWO nymph dropper 12–16 inches above. Get it on the bottom — add split shot until you feel it ticking rocks."
+  },
+  stimulator: {
+    name: "Stimulator (orange/yellow)", type: "Dry", size: "#8–14",
+    tags: { season:['latespring','summer'], flow:['normal','high'], sky:['sunny','partly'], activity:['rising','none'] },
+    weight: 8,
+    reason: "The Stimulator imitates stonefly adults and flying caddis — a big bushy high-vis attractor that fish recognize as a meal. In fast, broken water where presentation precision is less critical, this searching pattern finds fish that nothing else does.",
+    tip: "Works best in faster riffles and pocket water where fish have a split second to decide. Use it as a dry/dropper anchor with a bead-head nymph 16–20 inches below."
+  },
+
+  // ── PRINCE NYMPH ──
+  prince_nymph: {
+    name: "Prince Nymph", type: "Nymph", size: "#12–16",
+    tags: { season:['earlyspring','latespring','summer'], activity:['holding','none'], sky:['sunny','partly'] },
+    weight: 7,
+    reason: "The Prince Nymph is one of the most productive attractor nymphs in the West — it imitates stonefly nymphs, Dobsonfly larvae, and general food items all at once. When you're not sure what's in the water, the Prince finds fish.",
+    tip: "Add a hot-spot bead in orange or chartreuse for a modern twist that increases takes by 30%. Fish it in the middle of the water column."
+  },
+
+  // ── EGG FLIES ──
+  sucker_spawn: {
+    name: "Sucker Spawn / Egg Fly (peach/orange)", type: "Nymph", size: "#10–14",
+    tags: { season:['earlyspring'], flow:['normal','dropping'], temp:['cold','verycold'] },
+    weight: 8,
+    reason: "In early spring, whitefish and suckers spawn and their eggs drift downstream — free protein that trout gorge on. An egg fly in peach or orange dead-drifted along the bottom is often the most effective fly of early April on Utah rivers when nothing is hatching.",
+    tip: "Fish it on a short tight-line rig or under an indicator, dead-drift right on the bottom. High-stick nymphing keeps it in the feeding zone longest."
+  },
+
+};
+
+// ═══════════════════════════════════════════════
+// FLY DATABASE — LAKE / STILLWATER
+// ═══════════════════════════════════════════════
+const LAKE_FLIES = {
+
+  // ── CHIRONOMIDS ──
+  chironomid_black: {
+    name: "Chironomid Pupa (black/red rib)", type: "Chironomid", size: "#14–18",
+    tags: { lakeseason:['iceoff','earlyspring','latespring','summer','fall'], lakeactivity:['midwater','deep','shallows'] },
+    weight: 10,
+    reason: "Chironomids are the single most important food source in Utah reservoirs — cutthroat and rainbow trout eat them year-round at all depths. Black with a red or silver rib perfectly matches the natural midge pupa. At Strawberry, Currant Creek, and Jordanelle, this pattern catches fish 365 days a year.",
+    tip: "Fish under an indicator, dead still — zero movement. Set depth so the fly hangs 12–24 inches above bottom. Takes can be almost imperceptible — watch the indicator for any twitch, hesitation, or rise."
+  },
+  chironomid_olive: {
+    name: "Chironomid Pupa (olive/gold rib)", type: "Chironomid", size: "#14–20",
+    tags: { lakeseason:['earlyspring','latespring','summer'], lakesky:['sunny','partly','overcast'] },
+    weight: 9,
+    reason: "Olive chironomids hatch heavily in spring and early summer on Utah reservoirs. When fish refuse black patterns, switch to olive — different chironomid species dominate at different times of year and the olive rib pattern matches the warm-water species perfectly.",
+    tip: "Match the size to what's emerging — net a naturals near the surface and compare. Fish the olive version shallower, in 6–12 feet of water during active hatches."
+  },
+  chironomid_red: {
+    name: "Bloodworm / Red Chironomid Larva", type: "Chironomid", size: "#12–16",
+    tags: { lakeseason:['iceoff','earlyspring','winter','ice'], lakeactivity:['deep','midwater'] },
+    weight: 9,
+    reason: "The bloodworm is the larval stage of the midge — bright red from hemoglobin, it lives in the silt on the bottom. In early spring and ice-off conditions, trout root the bottom for bloodworms when nothing else is active. This is the go-to fly when nothing is hatching and fish are deep.",
+    tip: "Fish it right on the bottom — set your indicator depth so the fly just touches the silt. Jig it very gently 2–3 times, then dead still. Takes are often immediate after the subtle movement."
+  },
+  chironomid_zebra: {
+    name: "Zebra Midge (stillwater)", type: "Chironomid", size: "#16–20",
+    tags: { lakeseason:['earlyspring','latespring','fall'], lakeactivity:['midwater','shallows'], lakeclarity:['clear','slight'] },
+    weight: 9,
+    reason: "The zebra midge's silver bead and silver wire rib creates a flash point that mimics the air bubble a chironomid traps as it ascends to the surface. In clear water, this flash triggers follows and strikes at depth that darker patterns miss.",
+    tip: "Use this in 8–20 feet of water during the heat of the hatch. Pair with a deeper bloodworm larva on a two-fly rig — you cover both the bottom feed and the ascending pupa."
+  },
+  midge_cluster_lake: {
+    name: "Griffith's Gnat / Midge Cluster (lake)", type: "Dry", size: "#16–20",
+    tags: { lakeactivity:['surface'], lakesky:['overcast','earlymorning','evening'] },
+    weight: 9,
+    reason: "When trout are sipping midge clusters off the surface of a still reservoir, this is your dry fly. The Griffith's Gnat imitates multiple midges trapped together in the film — exactly what fish gulp in a lazy, rhythmic rise during calm conditions.",
+    tip: "Watch where fish are rising and cast AHEAD of them — not at them. Stillwater fish cruise as they rise. Present 3–4 feet in front of a cruising fish and let it come to the fly."
+  },
+
+  // ── SCUD / SHRIMP ──
+  scud_orange: {
+    name: "Scud (orange/burnt orange)", type: "Nymph", size: "#12–16",
+    tags: { laketype:['reservoir'], lakeseason:['earlyspring','latespring','fall','iceoff'], lakeactivity:['shallows','weedbed'] },
+    weight: 10,
+    reason: "Scuds (freshwater shrimp) are one of the top 3 food sources in Utah reservoirs. They turn orange when dead or disturbed, which is exactly what a fleeing or crushed scud looks like. At Strawberry Reservoir, orange scuds are responsible for the explosive growth of those giant cutthroats.",
+    tip: "Fish it along weed edges and shoal areas in 3–8 feet of water. Slow strip, pause, slow strip — imitate a scud swimming then resting. Gets crushes in the shallows during ice-off."
+  },
+  scud_grey: {
+    name: "Scud (olive/grey)", type: "Nymph", size: "#12–16",
+    tags: { laketype:['reservoir'], lakeseason:['summer','latespring'], lakeactivity:['midwater','weedbed'] },
+    weight: 9,
+    reason: "Live scuds are olive-grey in color. In summer when fish are deep or near weed beds, a natural-colored scud stripped slowly through the vegetation is deadly. Cutthroat and rainbow will follow it a long way before committing.",
+    tip: "Add a small bead head for depth and flash. Count it down to the weed tops and strip just above them. Getting snagged occasionally means you're in the zone."
+  },
+
+  // ── WOOLLY BUGGER (LAKE) ──
+  bugger_lake_black: {
+    name: "Woolly Bugger (black, lake style)", type: "Streamer", size: "#4–8",
+    tags: { lakeseason:['iceoff','earlyspring','fall'], lakeactivity:['shallows','inlet'], lakesky:['overcast','earlymorning','evening'] },
+    weight: 10,
+    reason: "At ice-off, big trout cruise the shallows aggressively and a black Woolly Bugger stripped through the margins is the most effective fly of the year. Cutthroats at Strawberry and cutthroat/tiger trout at Currant Creek absolutely hammer this pattern in early spring.",
+    tip: "Cast to the edge of any remaining ice or toward the inlet. Strip aggressively — 3 fast pulls, pause, repeat. Ice-off fish are hungry and angry, they'll chase hard."
+  },
+  bugger_lake_white: {
+    name: "Woolly Bugger (white/cream)", type: "Streamer", size: "#4–8",
+    tags: { lakeseason:['summer','latespring'], lakesky:['sunny','earlymorning'], lakeactivity:['shallows','midwater'] },
+    weight: 8,
+    reason: "White Woolly Buggers imitate baitfish and chubs — the prey item big cutthroats chase in open water in summer. In clear conditions with good light penetration, white provides maximum visibility to predatory fish at depth.",
+    tip: "Use a sinking line or count-down to get it below the surface before stripping. Vary the retrieve — sometimes a fast jerky strip, sometimes painfully slow. Match what the fish respond to."
+  },
+
+  // ── DAMSELFLY ──
+  damsel_nymph: {
+    name: "Damselfly Nymph (olive)", type: "Nymph", size: "#10–14",
+    tags: { lakeseason:['latespring','summer'], lakeactivity:['weedbed','shallows','midwater'], lakesky:['sunny','partly'] },
+    weight: 9,
+    reason: "Damselflies are massive food items and their hatch in June–July on Utah reservoirs is a game-changer. Damsel nymphs migrate from deep weed beds toward shore in huge numbers — trout target them selectively in the top 3 feet of water, making it visible, exciting fishing.",
+    tip: "Cast toward weed beds and strip toward shore with an undulating retrieve — hand-twist retrieve mimics the natural swimming motion best. Fish it just below the surface."
+  },
+  damsel_adult: {
+    name: "Foam Damsel Adult (blue/tan)", type: "Dry", size: "#10–12",
+    tags: { lakeseason:['latespring','summer'], lakesky:['sunny'], lakeactivity:['surface','shallows'] },
+    weight: 7,
+    reason: "When damselfly adults are hatching and mating, fish will crash them from below with explosive strikes. This is the most visually exciting stillwater fishing — you can watch the take. Blue foam body matches the adult perfectly.",
+    tip: "Fish it stationary near reeds and emergent vegetation. Give it occasional tiny twitches but mostly dead still — the adult damsel is clumsy and sits still for long stretches."
+  },
+
+  // ── DRAGONFLY / CRAYFISH ──
+  dragonfly_nymph: {
+    name: "Dragonfly Nymph (olive/tan)", type: "Nymph", size: "#6–10",
+    tags: { lakeseason:['summer'], lakeactivity:['weedbed','deep','midwater'] },
+    weight: 7,
+    reason: "Dragonfly nymphs are large, meaty food items that prowl the bottom of Utah reservoirs. Big cutthroats actively hunt them. A large olive nymph crawled slowly along the bottom in summer can intercept the biggest fish in the lake.",
+    tip: "Cast to structure — boulders, weed edges, drop-offs. Dead slow retrieve — dragonfly nymphs walk, they don't swim. Strip 2 inches, pause 3 seconds, repeat."
+  },
+  crayfish: {
+    name: "Crayfish / Crawdad (orange/brown)", type: "Streamer", size: "#4–8",
+    tags: { laketype:['reservoir'], lakeseason:['summer','latespring'], lakespecies:['brown','rainbow'], lakeactivity:['deep','midwater'] },
+    weight: 8,
+    reason: "Strawberry Reservoir is famous for its crayfish population — those giant cutthroats are partly so large because they eat crawdads. A crayfish pattern crawled backward along the bottom triggers territorial and predatory strikes from the biggest fish.",
+    tip: "Strip it backward — crayfish swim tail-first. Get it on the bottom and strip hard twice, then let it settle into the silt. Brown trout especially crush crayfish patterns."
+  },
+
+  // ── LEECH ──
+  leech_black: {
+    name: "Leech Pattern (black/purple)", type: "Streamer", size: "#6–10",
+    tags: { lakeseason:['iceoff','earlyspring','fall','winter'], lakesky:['overcast','earlymorning','evening'], lakeactivity:['shallows','midwater'] },
+    weight: 9,
+    reason: "Leeches are active in cold water when other food sources are dormant — they're one of the top early-spring and fall patterns in Utah reservoirs. A black marabou leech has incredible undulating action at slow retrieves, making it perfect for cold-water lake fishing.",
+    tip: "Use a slow hand-twist retrieve — imitate the wave-like motion of a real leech. In cold water, go painfully slow. Fish near the bank and along drop-offs."
+  },
+  leech_maroon: {
+    name: "Maroon / Wine Leech", type: "Streamer", size: "#6–10",
+    tags: { lakeseason:['iceoff','earlyspring'], lakeactivity:['shallows','inlet'], lakesky:['overcast','earlymorning'] },
+    weight: 8,
+    reason: "Maroon and wine-colored leeches are often more visible than black in off-color or low-light conditions. At ice-off when water is slightly milky from snowmelt, the warmer color tone gets seen faster by fish keying on movement.",
+    tip: "Strip toward the nearest structure. Don't be afraid of a slightly faster retrieve at ice-off — fish are more aggressive then than any other time of year."
+  },
+
+  // ── STILLWATER MAYFLY ──
+  callibaetis: {
+    name: "Callibaetis Nymph / Sparkle Dun", type: "Emerger", size: "#14–16",
+    tags: { lakeseason:['latespring','summer'], lakesky:['overcast','partly'], lakeactivity:['surface','shallows'] },
+    weight: 9,
+    reason: "Callibaetis is the dominant stillwater mayfly in Utah reservoirs — it hatches spring through fall on calm mornings. The nymph swims to the surface and emerges — trout key on this critical moment. A Sparkle Dun or Callibaetis Nymph fished in the top foot of water during the hatch is deadly.",
+    tip: "Fish it on a long fine leader (12+ feet) with a floating line. Very slow strip, or dead drift in any wind ripple. Look for the hatch to start as temperatures warm mid-morning."
+  },
+  parachute_adams_lake: {
+    name: "Parachute Adams (lake)", type: "Dry", size: "#14–16",
+    tags: { lakeactivity:['surface'], lakesky:['overcast','partly','earlymorning'] },
+    weight: 8,
+    reason: "The Adams imitates multiple mayfly species simultaneously — it's the searching dry fly for stillwater. When fish are rising but you can't ID the hatch, an Adams placed in their path converts cruising fish to eating fish. Universal pattern, always worth having.",
+    tip: "Cast well ahead of rising fish and let the fly sit completely still. If refused, wait — don't pick up and recast unless the fish has moved on. Stillwater fish circle back."
+  },
+
+  // ── ICE FISHING / WINTER ──
+  ice_jig_glo: {
+    name: "Glo-Bug / Ice Jig (chartreuse)", type: "Nymph", size: "#14–18",
+    tags: { lakeseason:['ice','iceoff','winter'] },
+    weight: 10,
+    reason: "Under the ice, visibility is low and fish metabolism is very slow. Bright chartreuse ice jigs get seen at distance and provoke slow, deliberate takes. The small jigging motion is the only presentation option through the ice — and this pattern is optimized for it.",
+    tip: "Jig 2 inches up, dead drop, repeat every 3–4 seconds. Set depth at 1–3 feet above bottom. Be patient — takes can come 30+ seconds after you stop moving."
+  },
+  euro_midge_ice: {
+    name: "Zebra Midge / Euro Jig (red/black)", type: "Chironomid", size: "#16–20",
+    tags: { lakeseason:['ice','winter'] },
+    weight: 9,
+    reason: "In winter under ice, trout feed almost exclusively on chironomid larvae and tiny invertebrates. A small red/black midge on a tungsten bead jigged gently through the ice hole catches fish when all other presentations fail. Precision and patience win.",
+    tip: "Use 5x–6x fluorocarbon and the smallest tungsten jig you can feel. The touch is everything — feel for soft pressure, not a hard strike. Set on any change in weight."
+  },
+
+  // ── KOKANEE ──
+  kokanee_jig: {
+    name: "Flash Jig / Wedding Ring (pink/orange)", type: "Wet", size: "#12–16",
+    tags: { lakespecies:['kokanee'], lakeseason:['summer','latespring'] },
+    weight: 10,
+    reason: "Kokanee salmon are plankton feeders and don't respond to traditional fly patterns — they need flash and movement. A pink or orange wedding ring jig tipped with corn or maggot and bounced mid-water column is the most effective fly rod approach for kokanee in Utah reservoirs.",
+    tip: "Find the thermocline on your fish finder — kokanee suspend precisely at the temperature break. Jig at that depth. Slow rhythmic jigging, 6 inches up and down, every 2 seconds."
+  },
+  marabou_spoon_kokanee: {
+    name: "Marabou Spoon (pink/chartreuse)", type: "Streamer", size: "#8–12",
+    tags: { lakespecies:['kokanee'], lakeseason:['summer'] },
+    weight: 8,
+    reason: "Kokanee strike out of aggression and curiosity rather than hunger. A pink marabou or chartreuse flash pattern stripped at the right depth triggers territorial strikes. Effective early morning before the fish go deep.",
+    tip: "Strip fast — kokanee react to quick movement. Use a sinking line to reach 20–40 feet quickly. Schools move constantly, so cover water aggressively."
+  },
+};
+
+// ═══════════════════════════════════════════════
+// HATCH INTEL LIBRARY
+// ═══════════════════════════════════════════════
+const RIVER_HATCH_INTEL = {
+  earlyspring_cold: "Early April in Utah means one thing: Blue Wing Olives and midges. BWOs hatch on cold, overcast days between 11am–3pm — the exact conditions you're describing trigger the best hatches. Midges are active all day in cold water. Expect fish to be deep and slow until the BWO hatch fires, then they'll rise aggressively.",
+  earlyspring_sunny: "Sunny early spring days suppress BWO hatches — fish stay deep. Midges remain active but fish will be lethargic in cold clear water. Focus subsurface with midge nymphs and small streamers near bottom structure. The bite usually improves on the shadow side of the river.",
+  latespring_overcast: "Late spring overcast days can trigger BWOs, Green Drakes (mid-May onward), and early caddis simultaneously. This is the best window of the Utah fishing year. Watch for size — if large olive bugs are in the air, it's Green Drakes. Smaller? BWO. Tan fluttering bugs are caddis.",
+  latespring_sunny: "Sunny late spring mornings bring PMD hatches (10am–1pm) and afternoon caddis activity. Excellent dry fly conditions. Expect fish to be scattered and actively feeding. Terrestrials — ants and beetles — become relevant by June.",
+  summer_sunny: "Summer = terrestrials. Grasshoppers, beetles, and ants fall into the river constantly. Big browns position under cut banks waiting for the splat. Evening caddis hatches can be explosive. Midday fish deep or rest — early morning and evening are prime.",
+  summer_overcast: "Overcast summer days bring out PMDs, caddis, and sometimes Yellow Sallies (small stoneflies). Good streamer day too — low light means big browns move. Don't overlook a Stimulator in the riffles.",
+  fall_any: "Fall triggers BWO hatches again — the best dry fly season of the year on tailwaters. Big browns are pre-spawn and aggressive. Streamer fishing for trophy browns peaks in October–November. Egg flies become effective near spawning areas.",
+  winter_any: "Winter fishing in Utah is all about midges. Fish are lethargic, holding in the deepest pools. Tiny midge nymphs dead-drifted slowly are your only reliable option. Midday is the only window — wait for the temperature to peak before heading out.",
+};
+
+const LAKE_HATCH_INTEL = {
+  iceoff: "Ice-off is the single best fishing window of the year on Utah reservoirs. Big cutthroats and rainbows pour into the shallows, starving after winter. They'll crush anything that moves — leeches, scuds, Woolly Buggers. The fish are less selective than any other time of year. Don't miss this window — it lasts only 2–4 weeks.",
+  earlyspring: "Early spring on reservoirs means chironomids dominating the menu. Fish are transitioning from deep winter holding water to mid-depth feeding. Chironomid pupa patterns under a strike indicator in 8–20 feet of water are the most reliable approach. Scuds are also active near the margins.",
+  latespring: "Late spring brings multiple hatches simultaneously — chironomids, callibaetis mayflies, and the beginning of damselfly activity. This is the most productive surface fishing of the year on Utah stillwaters. Mornings are dry fly time, afternoons are chironomid and damsel nymph time.",
+  summer: "Summer reservoirs stratify — fish move to the thermocline (often 15–35 feet). Chironomids, damselfly nymphs, dragonfly nymphs, and crayfish are the primary foods. Early morning and evening offer the best shallow-water action. Midday requires sinking lines to reach feeding depth.",
+  fall: "Fall is trophy time on Utah reservoirs. Big cutthroats pre-condition for winter by feeding heavily on leeches, scuds, and small fish. Streamer fishing improves dramatically. Chironomids remain active into November. Water clarity is often at its best.",
+  ice: "Ice fishing chironomids through the frozen surface of Strawberry, Jordanelle, or Currant Creek is a Utah winter tradition. Fish suspend just above bottom, eating midge larvae and tiny invertebrates. Tiny jigs in red, chartreuse, or glow colors jigged slowly are the ticket.",
+};
+
+// ═══════════════════════════════════════════════
+// SCORING ENGINE
+// ═══════════════════════════════════════════════
+function scoreRiverFlies() {
+  const results = [];
+  for (const [id, fly] of Object.entries(RIVER_FLIES)) {
+    let score = fly.weight || 5;
+    const tags = fly.tags || {};
+
+    for (const [group, vals] of Object.entries(tags)) {
+      const userVal = sel[group];
+      if (!userVal) continue;
+      if (vals.includes(userVal)) score += 4;
+      else score -= 2;
+    }
+
+    // Species bonuses
+    if (sel.species === 'brown' && (id.includes('streamer') || id.includes('bugger') || id.includes('articulated') || id.includes('hopper'))) score += 3;
+    if (sel.species === 'cutthroat' && (id.includes('bwo') || id.includes('scud'))) score += 2;
+    if (sel.species === 'tiger' && id.includes('bugger')) score += 2;
+
+    // Temperature suppression
+    if (sel.temp === 'verycold' && fly.type === 'Dry' && !['griffiths_gnat','bwo_parachute'].includes(id)) score -= 4;
+    if (sel.temp === 'verycold' && fly.type === 'Streamer') score -= 2;
+
+    // Sky bonuses
+    if (sel.sky === 'overcast' || sel.sky === 'snow') {
+      if (id.includes('bwo')) score += 3;
+      if (id.includes('midge')) score += 2;
+    }
+    if (sel.sky === 'sunny' && (id.includes('hopper') || id.includes('pmd'))) score += 2;
+    if (sel.sky === 'evening' && (id.includes('caddis') || id.includes('soft_hackle'))) score += 3;
+
+    // Flow bonuses
+    if (sel.flow === 'high' || sel.flow === 'dropping') {
+      if (id.includes('san_juan') || id.includes('rubber_legs')) score += 4;
+    }
+    if (sel.flow === 'low') {
+      if (id.includes('midge') || id.includes('bwo')) score += 2;
+      if (id.includes('streamer')) score -= 2;
+    }
+
+    // Activity bonuses
+    if (sel.activity === 'rising' && fly.type === 'Dry') score += 4;
+    if (sel.activity === 'sipping' && (fly.type === 'Dry' || fly.type === 'Emerger')) score += 4;
+    if (sel.activity === 'holding' && (fly.type === 'Streamer' || fly.type === 'Nymph')) score += 3;
+    if ((sel.activity === 'rising' || sel.activity === 'sipping') && fly.type === 'Streamer') score -= 4;
+
+    if (score > 0) results.push({ ...fly, score, id });
+  }
+  return results.sort((a,b) => b.score - a.score);
+}
+
+function scoreLakeFlies() {
+  const results = [];
+  for (const [id, fly] of Object.entries(LAKE_FLIES)) {
+    let score = fly.weight || 5;
+    const tags = fly.tags || {};
+
+    for (const [group, vals] of Object.entries(tags)) {
+      const userVal = sel[group];
+      if (!userVal) continue;
+      if (vals.includes(userVal)) score += 4;
+      else score -= 1;
+    }
+
+    // Species bonuses
+    if (sel.lakespecies === 'kokanee' && id.includes('kokanee')) score += 5;
+    if (sel.lakespecies === 'kokanee' && !id.includes('kokanee')) score -= 3;
+    if (sel.lakespecies === 'brown' && id.includes('crayfish')) score += 3;
+    if (sel.lakespecies === 'tiger' && id.includes('bugger')) score += 2;
+
+    // Chironomid always scores high
+    if (fly.type === 'Chironomid') score += 3;
+
+    // Activity bonuses
+    if (sel.lakeactivity === 'surface' && fly.type === 'Dry') score += 4;
+    if (sel.lakeactivity === 'deep' && fly.type === 'Chironomid') score += 3;
+    if (sel.lakeactivity === 'shallows' && (fly.type === 'Streamer' || id.includes('scud'))) score += 2;
+    if (sel.lakeactivity === 'weedbed' && (id.includes('damsel') || id.includes('scud') || id.includes('dragon'))) score += 3;
+
+    // Season bonuses
+    if (sel.lakeseason === 'iceoff' && (id.includes('leech') || id.includes('bugger'))) score += 4;
+    if (sel.lakeseason === 'ice' && !['ice_jig','euro_midge'].some(p => id.startsWith(p))) score -= 3;
+    if (sel.lakeseason === 'summer' && id.includes('damsel')) score += 3;
+
+    if (score > 0) results.push({ ...fly, score, id });
+  }
+  return results.sort((a,b) => b.score - a.score);
+}
+
+function getHatchIntel() {
+  if (mode === 'lake') {
+    const s = sel.lakeseason;
+    return LAKE_HATCH_INTEL[s] || "Fish are feeding on the primary food sources available. Chironomids are always a safe starting point on Utah reservoirs — pair with a scud or leech depending on the season and conditions.";
+  }
+  const season = sel.season || 'earlyspring';
+  const sky = sel.sky || 'overcast';
+  if (season === 'winter') return RIVER_HATCH_INTEL.winter_any;
+  if (season === 'fall') return RIVER_HATCH_INTEL.fall_any;
+  if (season === 'summer') return sky === 'overcast' ? RIVER_HATCH_INTEL.summer_overcast : RIVER_HATCH_INTEL.summer_sunny;
+  if (season === 'latespring') return (sky === 'sunny' || sky === 'partly') ? RIVER_HATCH_INTEL.latespring_sunny : RIVER_HATCH_INTEL.latespring_overcast;
+  return (sky === 'sunny') ? RIVER_HATCH_INTEL.earlyspring_sunny : RIVER_HATCH_INTEL.earlyspring_cold;
+}
+
+// ═══════════════════════════════════════════════
+// FLY IMAGE URLs — searchable Wikipedia / public domain / direct tying sources
+// ═══════════════════════════════════════════════
+const FLY_IMAGES = {
+  // River
+  midge_zebra:         "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Zebra_Midge.jpg/320px-Zebra_Midge.jpg",
+  midge_disco:         "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Zebra_Midge.jpg/320px-Zebra_Midge.jpg",
+  midge_mercury:       "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Zebra_Midge.jpg/320px-Zebra_Midge.jpg",
+  griffiths_gnat:      "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Griffiths_Gnat.jpg/320px-Griffiths_Gnat.jpg",
+  bwo_parachute:       "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Parachute_Blue_Winged_Olive.jpg/320px-Parachute_Blue_Winged_Olive.jpg",
+  bwo_nymph:           "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Pheasant_tail_nymph.jpg/320px-Pheasant_tail_nymph.jpg",
+  bwo_emerger:         "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Parachute_Blue_Winged_Olive.jpg/320px-Parachute_Blue_Winged_Olive.jpg",
+  woolly_bugger_black: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Woolly_Bugger.jpg/320px-Woolly_Bugger.jpg",
+  woolly_bugger_olive: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Woolly_Bugger.jpg/320px-Woolly_Bugger.jpg",
+  articulated_streamer:"https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Woolly_Bugger.jpg/320px-Woolly_Bugger.jpg",
+  san_juan_worm:       "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/San_Juan_Worm.jpg/320px-San_Juan_Worm.jpg",
+  san_juan_pink:       "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/San_Juan_Worm.jpg/320px-San_Juan_Worm.jpg",
+  pmd_dry:             "https://upload.wikimedia.org/wikipedia/commons/thumb/0/08/Pale_morning_dun_parachute.jpg/320px-Pale_morning_dun_parachute.jpg",
+  pmd_nymph:           "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Pheasant_tail_nymph.jpg/320px-Pheasant_tail_nymph.jpg",
+  elk_hair_caddis:     "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Elk_hair_caddis.jpg/320px-Elk_hair_caddis.jpg",
+  x_caddis:            "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Elk_hair_caddis.jpg/320px-Elk_hair_caddis.jpg",
+  soft_hackle:         "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Elk_hair_caddis.jpg/320px-Elk_hair_caddis.jpg",
+  green_drake:         "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Parachute_Blue_Winged_Olive.jpg/320px-Parachute_Blue_Winged_Olive.jpg",
+  hopper:              "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Parachute_Hopper.jpg/320px-Parachute_Hopper.jpg",
+  beetle:              "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Parachute_Hopper.jpg/320px-Parachute_Hopper.jpg",
+  pat_rubber_legs:     "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Pheasant_tail_nymph.jpg/320px-Pheasant_tail_nymph.jpg",
+  stimulator:          "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Parachute_Hopper.jpg/320px-Parachute_Hopper.jpg",
+  prince_nymph:        "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Pheasant_tail_nymph.jpg/320px-Pheasant_tail_nymph.jpg",
+  sucker_spawn:        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/San_Juan_Worm.jpg/320px-San_Juan_Worm.jpg",
+  // Lake
+  chironomid_black:    "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Zebra_Midge.jpg/320px-Zebra_Midge.jpg",
+  chironomid_olive:    "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Zebra_Midge.jpg/320px-Zebra_Midge.jpg",
+  chironomid_red:      "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/San_Juan_Worm.jpg/320px-San_Juan_Worm.jpg",
+  chironomid_zebra:    "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Zebra_Midge.jpg/320px-Zebra_Midge.jpg",
+  midge_cluster_lake:  "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Griffiths_Gnat.jpg/320px-Griffiths_Gnat.jpg",
+  scud_orange:         "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Pheasant_tail_nymph.jpg/320px-Pheasant_tail_nymph.jpg",
+  scud_grey:           "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Pheasant_tail_nymph.jpg/320px-Pheasant_tail_nymph.jpg",
+  bugger_lake_black:   "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Woolly_Bugger.jpg/320px-Woolly_Bugger.jpg",
+  bugger_lake_white:   "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Woolly_Bugger.jpg/320px-Woolly_Bugger.jpg",
+  damsel_nymph:        "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Pheasant_tail_nymph.jpg/320px-Pheasant_tail_nymph.jpg",
+  damsel_adult:        "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Parachute_Blue_Winged_Olive.jpg/320px-Parachute_Blue_Winged_Olive.jpg",
+  dragonfly_nymph:     "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Pheasant_tail_nymph.jpg/320px-Pheasant_tail_nymph.jpg",
+  crayfish:            "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Woolly_Bugger.jpg/320px-Woolly_Bugger.jpg",
+  leech_black:         "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Woolly_Bugger.jpg/320px-Woolly_Bugger.jpg",
+  leech_maroon:        "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Woolly_Bugger.jpg/320px-Woolly_Bugger.jpg",
+  callibaetis:         "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Parachute_Blue_Winged_Olive.jpg/320px-Parachute_Blue_Winged_Olive.jpg",
+  parachute_adams_lake:"https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Parachute_Blue_Winged_Olive.jpg/320px-Parachute_Blue_Winged_Olive.jpg",
+  ice_jig_glo:         "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Zebra_Midge.jpg/320px-Zebra_Midge.jpg",
+  euro_midge_ice:      "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Zebra_Midge.jpg/320px-Zebra_Midge.jpg",
+  kokanee_jig:         "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/San_Juan_Worm.jpg/320px-San_Juan_Worm.jpg",
+  marabou_spoon_kokanee:"https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Woolly_Bugger.jpg/320px-Woolly_Bugger.jpg",
+};
+
+// Better quality image search URLs per fly (Google image search proxied)
+const FLY_SEARCH_QUERIES = {
+  midge_zebra:         "zebra midge fly pattern black silver",
+  midge_disco:         "disco midge fly pattern pearl",
+  midge_mercury:       "mercury midge fly pattern bead head",
+  griffiths_gnat:      "griffiths gnat midge cluster dry fly",
+  bwo_parachute:       "parachute blue wing olive dry fly",
+  bwo_nymph:           "pheasant tail nymph olive fly",
+  bwo_emerger:         "RS2 emerger fly pattern olive",
+  woolly_bugger_black: "black woolly bugger streamer fly",
+  woolly_bugger_olive: "olive woolly bugger streamer fly",
+  articulated_streamer:"articulated streamer fly black olive",
+  san_juan_worm:       "san juan worm red fly pattern",
+  san_juan_pink:       "san juan worm pink fly pattern",
+  pmd_dry:             "pale morning dun parachute dry fly",
+  pmd_nymph:           "hares ear nymph pale olive fly",
+  elk_hair_caddis:     "elk hair caddis tan dry fly",
+  x_caddis:            "x caddis emerger amber fly",
+  soft_hackle:         "soft hackle wet fly partridge olive",
+  green_drake:         "green drake parachute dry fly",
+  hopper:              "parachute hopper grasshopper fly",
+  beetle:              "foam beetle black dry fly",
+  pat_rubber_legs:     "pat rubber legs stonefly nymph",
+  stimulator:          "stimulator dry fly orange",
+  prince_nymph:        "prince nymph bead head fly",
+  sucker_spawn:        "egg fly sucker spawn orange",
+  chironomid_black:    "black chironomid pupa fly silver bead gills",
+  chironomid_olive:    "olive chironomid pupa fly gold rib",
+  chironomid_red:      "bloodworm red chironomid larva fly",
+  chironomid_zebra:    "zebra midge stillwater chironomid",
+  midge_cluster_lake:  "griffiths gnat midge cluster lake",
+  scud_orange:         "orange scud fly pattern curved hook",
+  scud_grey:           "olive grey scud fly pattern",
+  bugger_lake_black:   "black woolly bugger lake streamer",
+  bugger_lake_white:   "white woolly bugger lake streamer",
+  damsel_nymph:        "damselfly nymph fly olive",
+  damsel_adult:        "foam damsel adult blue fly",
+  dragonfly_nymph:     "dragonfly nymph fly olive tan",
+  crayfish:            "crayfish crawdad fly pattern",
+  leech_black:         "black marabou leech fly stillwater",
+  leech_maroon:        "maroon mohair leech fly",
+  callibaetis:         "callibaetis nymph sparkle dun fly",
+  parachute_adams_lake:"parachute adams dry fly lake",
+  ice_jig_glo:         "chartreuse ice jig tungsten fly",
+  euro_midge_ice:      "zebra midge ice fishing jig",
+  kokanee_jig:         "pink wedding ring jig kokanee",
+  marabou_spoon_kokanee:"pink marabou spoon fly kokanee",
+};
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function typeBadgeClass(type) {
+  const map = { 'Dry':'badge-dry','Nymph':'badge-nymph','Streamer':'badge-streamer',
+    'Emerger':'badge-emerger','Wet':'badge-wet','Chironomid':'badge-chironomid','Attractor':'badge-attractor' };
+  return map[type] || 'badge-nymph';
+}
+
+function renderFlyCard(fly, rank) {
+  const conf = Math.min(5, Math.max(1, Math.round((fly.score / 22) * 5)));
+  const dots = Array.from({length:5},(_,i)=>`<div class="conf-dot ${i<conf?'on':''}"></div>`).join('');
+  const query = FLY_SEARCH_QUERIES[fly.id] || fly.name + ' fly pattern';
+  const imgId = 'img_' + fly.id + '_' + rank;
+  // Use Wikimedia commons images where available, fall back to a placeholder showing the search term
+  const imgSrc = getFlyImageUrl(fly.id);
+  return `
+    <div class="fly-card">
+      <div class="fly-img-wrap">
+        <img id="${imgId}" src="${imgSrc}" alt="${fly.name} fly pattern"
+          class="loading"
+          onload="this.classList.remove('loading');this.classList.add('loaded');"
+          onerror="this.parentElement.innerHTML='<div class=\\'fly-img-none\\'>${escHtml(fly.name)}</div>';">
+      </div>
+      <div class="fly-card-header">
+        <div>
+          <div class="fly-name">${fly.name}</div>
+          <div class="fly-size">${fly.size}</div>
+        </div>
+        <div class="fly-badge-row">
+          <div class="fly-type-badge ${typeBadgeClass(fly.type)}">${fly.type}</div>
+          <div class="conf-dots" title="Confidence">${dots}</div>
+        </div>
+      </div>
+      <div class="fly-card-body">
+        <div class="fly-reason">${fly.reason}</div>
+        <div class="fly-tip">${fly.tip}</div>
+      </div>
+    </div>`;
+}
+
+function getFlyImageUrl(id) {
+  // Map each fly ID to a reliable publicly-accessible image
+  const urls = {
+    midge_zebra:         'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/Zebra_midge_fly_pattern.jpg/400px-Zebra_midge_fly_pattern.jpg',
+    midge_disco:         'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/Zebra_midge_fly_pattern.jpg/400px-Zebra_midge_fly_pattern.jpg',
+    midge_mercury:       'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/Zebra_midge_fly_pattern.jpg/400px-Zebra_midge_fly_pattern.jpg',
+    griffiths_gnat:      'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Griffiths_Gnat_fly.jpg/400px-Griffiths_Gnat_fly.jpg',
+    bwo_parachute:       'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Parachute_Adams.jpg/400px-Parachute_Adams.jpg',
+    bwo_nymph:           'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Pheasant_tail_nymph_fly.jpg/400px-Pheasant_tail_nymph_fly.jpg',
+    bwo_emerger:         'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Parachute_Adams.jpg/400px-Parachute_Adams.jpg',
+    woolly_bugger_black: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Woolly_Bugger.jpg/400px-Woolly_Bugger.jpg',
+    woolly_bugger_olive: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Woolly_Bugger.jpg/400px-Woolly_Bugger.jpg',
+    articulated_streamer:'https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Woolly_Bugger.jpg/400px-Woolly_Bugger.jpg',
+    san_juan_worm:       'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/San_Juan_Worm_fly.jpg/400px-San_Juan_Worm_fly.jpg',
+    san_juan_pink:       'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/San_Juan_Worm_fly.jpg/400px-San_Juan_Worm_fly.jpg',
+    pmd_dry:             'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Parachute_Adams.jpg/400px-Parachute_Adams.jpg',
+    pmd_nymph:           'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Pheasant_tail_nymph_fly.jpg/400px-Pheasant_tail_nymph_fly.jpg',
+    elk_hair_caddis:     'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/Elk_hair_caddis_fly.jpg/400px-Elk_hair_caddis_fly.jpg',
+    x_caddis:            'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/Elk_hair_caddis_fly.jpg/400px-Elk_hair_caddis_fly.jpg',
+    soft_hackle:         'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/Elk_hair_caddis_fly.jpg/400px-Elk_hair_caddis_fly.jpg',
+    green_drake:         'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Parachute_Adams.jpg/400px-Parachute_Adams.jpg',
+    hopper:              'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Parachute_Adams.jpg/400px-Parachute_Adams.jpg',
+    beetle:              'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Parachute_Adams.jpg/400px-Parachute_Adams.jpg',
+    pat_rubber_legs:     'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Pheasant_tail_nymph_fly.jpg/400px-Pheasant_tail_nymph_fly.jpg',
+    stimulator:          'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Parachute_Adams.jpg/400px-Parachute_Adams.jpg',
+    prince_nymph:        'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Pheasant_tail_nymph_fly.jpg/400px-Pheasant_tail_nymph_fly.jpg',
+    sucker_spawn:        'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/San_Juan_Worm_fly.jpg/400px-San_Juan_Worm_fly.jpg',
+    chironomid_black:    'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/Zebra_midge_fly_pattern.jpg/400px-Zebra_midge_fly_pattern.jpg',
+    chironomid_olive:    'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/Zebra_midge_fly_pattern.jpg/400px-Zebra_midge_fly_pattern.jpg',
+    chironomid_red:      'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/San_Juan_Worm_fly.jpg/400px-San_Juan_Worm_fly.jpg',
+    chironomid_zebra:    'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/Zebra_midge_fly_pattern.jpg/400px-Zebra_midge_fly_pattern.jpg',
+    midge_cluster_lake:  'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Griffiths_Gnat_fly.jpg/400px-Griffiths_Gnat_fly.jpg',
+    scud_orange:         'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Pheasant_tail_nymph_fly.jpg/400px-Pheasant_tail_nymph_fly.jpg',
+    scud_grey:           'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Pheasant_tail_nymph_fly.jpg/400px-Pheasant_tail_nymph_fly.jpg',
+    bugger_lake_black:   'https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Woolly_Bugger.jpg/400px-Woolly_Bugger.jpg',
+    bugger_lake_white:   'https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Woolly_Bugger.jpg/400px-Woolly_Bugger.jpg',
+    damsel_nymph:        'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Pheasant_tail_nymph_fly.jpg/400px-Pheasant_tail_nymph_fly.jpg',
+    damsel_adult:        'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Parachute_Adams.jpg/400px-Parachute_Adams.jpg',
+    dragonfly_nymph:     'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Pheasant_tail_nymph_fly.jpg/400px-Pheasant_tail_nymph_fly.jpg',
+    crayfish:            'https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Woolly_Bugger.jpg/400px-Woolly_Bugger.jpg',
+    leech_black:         'https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Woolly_Bugger.jpg/400px-Woolly_Bugger.jpg',
+    leech_maroon:        'https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Woolly_Bugger.jpg/400px-Woolly_Bugger.jpg',
+    callibaetis:         'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Parachute_Adams.jpg/400px-Parachute_Adams.jpg',
+    parachute_adams_lake:'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Parachute_Adams.jpg/400px-Parachute_Adams.jpg',
+    ice_jig_glo:         'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/Zebra_midge_fly_pattern.jpg/400px-Zebra_midge_fly_pattern.jpg',
+    euro_midge_ice:      'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/Zebra_midge_fly_pattern.jpg/400px-Zebra_midge_fly_pattern.jpg',
+    kokanee_jig:         'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/San_Juan_Worm_fly.jpg/400px-San_Juan_Worm_fly.jpg',
+    marabou_spoon_kokanee:'https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Woolly_Bugger.jpg/400px-Woolly_Bugger.jpg',
+  };
+  return urls[id] || '';
+}
+
+function showResults() {
+  const ranked = mode === 'river' ? scoreRiverFlies() : scoreLakeFlies();
+  const top = ranked.slice(0, 4);
+  const secondary = ranked.slice(4, 7);
+
+  if (top.length === 0) {
+    alert('Select at least one condition to get recommendations.');
+    return;
+  }
+
+  // Condition tags
+  const tagEl = document.getElementById('cond-tags');
+  tagEl.innerHTML = '';
+  const groups = mode === 'river'
+    ? ['clarity','temp','sky','flow','activity','season','species']
+    : ['laketype','lakeseason','lakesky','lakeactivity','lakeclarity','lakespecies'];
+  const labels = {
+    crystal:'Clear',offcolor:'Slightly off',murky:'Murky',blown:'Blown out',
+    verycold:'<40°F',cold:'40–48°F',cool:'48–56°F',ideal:'56–65°F',warm:'>65°F',
+    overcast:'Overcast',snow:'Snowing',sunny:'Sunny',partly:'Partly cloudy',evening:'Evening',
+    low:'Low flow',normal:'Normal flow',high:'High flow',dropping:'Dropping',
+    rising:'Actively rising',sipping:'Sipping',holding:'Holding deep',none:'No activity',
+    earlyspring:'Early spring',latespring:'Late spring',summer:'Summer',fall:'Fall',winter:'Winter',
+    brown:'Brown trout',rainbow:'Rainbow',cutthroat:'Cutthroat',tiger:'Tiger trout',brook:'Brook trout',
+    reservoir:'Reservoir',mountain:'Alpine lake',tailwater:'Tailwater',
+    iceoff:'Ice-off',ice:'Ice fishing',
+    shallows:'Shallows',surface:'Surface rising',midwater:'Mid-water',deep:'Deep',
+    weedbed:'Weed beds',inlet:'Near inlet',
+    clear:'Clear',slight:'Slightly off',turbid:'Turbid',
+    cutthroat:'Cutthroat',kokanee:'Kokanee',
+    earlymorning:'Early morning',wind:'Windy',
+  };
+  groups.forEach(g => {
+    if (sel[g]) {
+      const tag = document.createElement('div');
+      tag.className = 'cond-tag';
+      tag.textContent = labels[sel[g]] || sel[g];
+      tagEl.appendChild(tag);
+    }
+  });
+  if (tagEl.children.length === 0) {
+    const tag = document.createElement('div');
+    tag.className = 'cond-tag';
+    tag.textContent = mode === 'river' ? 'River / Stream' : 'Lake / Stillwater';
+    tagEl.appendChild(tag);
+  }
+
+  // Hatch intel
+  document.getElementById('hatch-intel-text').textContent = getHatchIntel();
+
+  // Primary flies
+  document.getElementById('primary-flies').innerHTML = top.map((f,i) => renderFlyCard(f,i+1)).join('');
+
+  // Secondary
+  const secEl = document.getElementById('secondary-flies');
+  const secTitle = document.getElementById('secondary-title');
+  if (secondary.length > 0) {
+    secEl.innerHTML = secondary.map((f,i) => renderFlyCard(f,i+5)).join('');
+    secTitle.style.display = '';
+  } else {
+    secEl.innerHTML = '';
+    secTitle.style.display = 'none';
+  }
+
+  document.getElementById('selector-screen').classList.remove('visible');
+  document.getElementById('results-screen').classList.add('visible');
+  window.scrollTo(0,0);
+}
+
+function goBack() {
+  document.getElementById('results-screen').classList.remove('visible');
+  document.getElementById('selector-screen').classList.add('visible');
+  window.scrollTo(0,0);
+}
+</script>
+</body>
+</html>
